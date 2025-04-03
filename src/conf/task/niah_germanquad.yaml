@@ -1,0 +1,5 @@
+task_name: niah_germanquad
+framework: "hf_qa"
+corpus_args:
+  data_folder: "niah_GermanQuAD"
+max_length: 8192
