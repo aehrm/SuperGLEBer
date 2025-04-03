@@ -48,7 +48,7 @@ def exact_match_score(prediction, ground_truth):
 
 
 def training(cfg: DictConfig) -> None:
-    def preprocess_function(examples, tokenizer: PreTrainedTokenizer, max_length: int = get_max_seq_length(cfg)):
+    def preprocess_function(examples, tokenizer: PreTrainedTokenizer, max_length):
         questions = [q.strip() for q in examples["question"]]
         inputs = tokenizer(
             questions,
@@ -56,7 +56,6 @@ def training(cfg: DictConfig) -> None:
             max_length=max_length,
             truncation=True,
             return_offsets_mapping=True,
-            padding="max_length",
         )
 
         offset_mapping = inputs.pop("offset_mapping")
@@ -119,14 +118,24 @@ def training(cfg: DictConfig) -> None:
 
     logger.info(f"first sample: {qa_ds['test'][0]}")
 
+    task_max_length = get_max_seq_length(cfg) if not cfg.task.task_name.startswith('niah_') else cfg.task.max_length
+    logger.info(f"Using {task_max_length} as max_seq_length")
+    
+
     tokenized_qa_ds: DatasetDict = qa_ds.map(
         preprocess_function,
         batched=True,
         fn_kwargs={
             "tokenizer": tokenizer,
-            "max_length": get_max_seq_length(cfg),
+            "max_length": task_max_length,
         },
     )
+
+    train_fp16 = cfg.train_procedure.get("fp16", False)
+    if cfg.task.task_name in {"mlqa", "germanquad"}:
+        train_fp16 = False  # backward compatibility!
+
+    logger.info(f"Training with {train_fp16=}")
 
     training_args = TrainingArguments(
         output_dir=Path.cwd() / cfg.task.task_name / "training_logs",
@@ -135,7 +144,7 @@ def training(cfg: DictConfig) -> None:
         per_device_eval_batch_size=cfg.train_args.batch_size,
         num_train_epochs=cfg.train_args.epochs,
         seed=cfg.seed,
-        # fp16=cfg.train_args.get("fp16", False),
+        fp16=train_fp16,
         gradient_accumulation_steps=(
             cfg.train_args.gradient_accumulation_steps if cfg.train_args.gradient_accumulation_steps else 1
         ),
@@ -209,10 +218,30 @@ def training(cfg: DictConfig) -> None:
         acc = exact_match_score(flat_preds, flat_labels)
         acc = sum(acc) / len(acc)
         logger.info(f"f1: {f1}, acc: {acc}")
-        return {
+        global_metrics = {
             "f1_score": f1,
             "acc_score": acc,
         }
+
+        if cfg.task.task_name.startswith("niah_"):
+            label_ids = np.array(label_ids)
+            for begin in range(0, task_max_length, 1024):
+                end = begin + 1024
+                mask = (begin <= label_ids[0,:]) & (label_ids[1,:] < end)
+                if sum(mask) == 0:
+                    continue
+                
+                flat_labels = label_ids[:,mask].flatten()
+                flat_preds = preds_2d[:,mask].flatten()
+                f1 = f1_score(flat_preds, flat_labels)
+                match_scores = exact_match_score(flat_preds, flat_labels)
+                acc = sum(match_scores) / len(match_scores)
+                logger.info(f"for range [{begin}:{end}]: f1: {f1}, acc: {acc}, num: {len(match_scores)}")
+                global_metrics[f'f1_score_{end}'] = f1
+                global_metrics[f'acc_score_{end}'] = acc
+                global_metrics[f'num_samples_{end}'] = sum(mask)
+
+        return global_metrics
 
     logger.info("creating trainer")
 
