@@ -145,6 +145,7 @@ def training(cfg: DictConfig) -> None:
         num_train_epochs=cfg.train_args.epochs,
         seed=cfg.seed,
         fp16=train_fp16,
+        include_for_metrics=["inputs"],
         gradient_accumulation_steps=(
             cfg.train_args.gradient_accumulation_steps if cfg.train_args.gradient_accumulation_steps else 1
         ),
@@ -200,8 +201,12 @@ def training(cfg: DictConfig) -> None:
 
     def compute_metrics(p):
         preds = p.predictions
+        inputs = p.inputs
+
+        input_seq_len = np.sum(inputs > 0, axis=-1)
         if len(preds) == 3:
             preds = preds[:2]
+
         label_ids = p.label_ids
         max_last_dim = np.argmax(preds, axis=2)
         preds_2d = max_last_dim.reshape((-1, max_last_dim.shape[-1]))
@@ -227,7 +232,7 @@ def training(cfg: DictConfig) -> None:
             label_ids = np.array(label_ids)
             for begin in range(0, task_max_length, 1024):
                 end = begin + 1024
-                mask = (begin <= label_ids[0,:]) & (label_ids[1,:] < end)
+                mask = (begin <= input_seq_len) & (input_seq_len < end)
                 if sum(mask) == 0:
                     continue
                 
