@@ -23,13 +23,25 @@ import sys
 
 from utils import get_bnb_config, get_max_seq_length, get_peft_config
 
+class Tee(object):
+    def __init__(self, name, mode):
+        self.file = open(name, mode)
+        self.stdout = sys.stdout
+        sys.stdout = self
+    def write(self, data):
+        self.file.write(data)
+        self.stdout.write(data)
+    def flush(self):
+        self.file.flush()
+
 
 def setup_logging(log_dir: Path):
     log_dir.mkdir(parents=True, exist_ok=True)
     log_file = log_dir / "train.log"
     logger.add(log_file)
-    sys.stdout = open(log_file, "a")
-    sys.stderr = open(log_file, "a")
+    tee = Tee(log_file, "a")
+    #sys.stdout = open(log_file, "a")
+    #sys.stderr = open(log_file, "a")
 
 
 def f1_score(prediction, ground_truth):
@@ -144,6 +156,9 @@ def training(cfg: DictConfig) -> None:
         per_device_eval_batch_size=cfg.train_args.batch_size,
         num_train_epochs=cfg.train_args.epochs,
         seed=cfg.seed,
+        log_level="info",
+        logging_strategy="steps",
+        logging_steps=100,
         fp16=train_fp16,
         include_for_metrics=["inputs"],
         gradient_accumulation_steps=(
