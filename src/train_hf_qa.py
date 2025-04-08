@@ -161,7 +161,7 @@ def training(cfg: DictConfig) -> None:
         logging_strategy="steps",
         logging_steps=100,
         fp16=train_fp16,
-        include_for_metrics=["inputs"],
+        include_inputs_for_metrics=True,
         gradient_accumulation_steps=(
             cfg.train_args.gradient_accumulation_steps if cfg.train_args.gradient_accumulation_steps else 1
         ),
@@ -173,8 +173,8 @@ def training(cfg: DictConfig) -> None:
     Gemma2ForQuestionAnswering.register_for_auto_class("AutoModelForQuestionAnswering")
     AutoModelForQuestionAnswering.register(Gemma2Config, Gemma2ForQuestionAnswering)
 
-    ModernBertForQuestionAnswering.register_for_auto_class("AutoModelForQuestionAnswering")
-    AutoModelForQuestionAnswering.register(ModernBertConfig, ModernBertForQuestionAnswering)
+    #ModernBertForQuestionAnswering.register_for_auto_class("AutoModelForQuestionAnswering")
+    #AutoModelForQuestionAnswering.register(ModernBertConfig, ModernBertForQuestionAnswering)
 
     config = AutoConfig.from_pretrained(cfg.model.model_name, finetuning_task="question-answering",
                                         **cfg.model.get("model_config_args", {}))
