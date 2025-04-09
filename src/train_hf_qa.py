@@ -68,6 +68,7 @@ def training(cfg: DictConfig) -> None:
             max_length=max_length,
             truncation=True,
             return_offsets_mapping=True,
+            padding="max_length",   # as in the main branch
         )
 
         offset_mapping = inputs.pop("offset_mapping")
@@ -153,7 +154,7 @@ def training(cfg: DictConfig) -> None:
         output_dir=Path.cwd() / cfg.task.task_name / "training_logs",
         learning_rate=cfg.train_args.learning_rate,
         per_device_train_batch_size=cfg.train_args.batch_size,
-        per_device_eval_batch_size=cfg.train_args.batch_size,
+        per_device_eval_batch_size=1,
         num_train_epochs=cfg.train_args.epochs,
         seed=cfg.seed,
         log_level="info",
