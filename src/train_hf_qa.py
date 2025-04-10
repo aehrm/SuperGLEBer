@@ -68,7 +68,8 @@ def training(cfg: DictConfig) -> None:
             max_length=max_length,
             truncation=True,
             return_offsets_mapping=True,
-            padding="max_length",   # as in the main branch
+            padding=True,
+            pad_to_multiple_of=64,
         )
 
         offset_mapping = inputs.pop("offset_mapping")
