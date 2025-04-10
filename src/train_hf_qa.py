@@ -220,7 +220,7 @@ def training(cfg: DictConfig) -> None:
         preds = p.predictions
         inputs = p.inputs
 
-        input_seq_len = np.sum(inputs > 0, axis=-1)
+        input_seq_len = np.sum((inputs >= 0) & (inputs != tokenizer.pad_token_id), axis=-1)
         if len(preds) == 3:
             preds = preds[:2]
 
