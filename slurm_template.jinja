@@ -1,0 +1,28 @@
+#!/bin/bash
+#SBATCH -J supergleber_niah
+#SBATCH --array=0-{{jobs|length-1}}
+#SBATCH --output=slurm_logs/%A_%a.out
+#SBATCH --error=slurm_logs/%A_%a.out
+#SBATCH -c 2
+#SBATCH --mem=32G
+#SBATCH -p standard
+#SBATCH --gres=gpu:1             
+#SBATCH --tmp=5G 
+#SBATCH --mail-type ARRAY_TASKS,ALL
+#SBATCH --mail-user anton.ehrmanntraut@uni-wuerzburg.de
+
+cd {{pwd}}
+
+PARAM_ARR=(
+   {% for job in jobs %} "{{ job|join(' ') }}"
+   {% endfor %}
+)
+
+
+
+PARAMS=${PARAM_ARR[$SLURM_ARRAY_TASK_ID]}
+
+source venv/bin/activate
+echo python src/train.py $PARAMS
+srun python src/train.py $PARAMS
+

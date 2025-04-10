@@ -22,13 +22,25 @@ import sys
 
 from utils import get_bnb_config, get_max_seq_length, get_peft_config, patch_transformers_automodelforqna
 
+class Tee(object):
+    def __init__(self, name, mode):
+        self.file = open(name, mode)
+        self.stdout = sys.stdout
+        sys.stdout = self
+    def write(self, data):
+        self.file.write(data)
+        self.stdout.write(data)
+    def flush(self):
+        self.file.flush()
+
 
 def setup_logging(log_dir: Path):
     log_dir.mkdir(parents=True, exist_ok=True)
     log_file = log_dir / "train.log"
     logger.add(log_file)
-    sys.stdout = open(log_file, "a")
-    sys.stderr = open(log_file, "a")
+    tee = Tee(log_file, "a")
+    #sys.stdout = open(log_file, "a")
+    #sys.stderr = open(log_file, "a")
 
 
 def f1_score(prediction, ground_truth):
@@ -47,7 +59,7 @@ def exact_match_score(prediction, ground_truth):
 
 
 def training(cfg: DictConfig) -> None:
-    def preprocess_function(examples, tokenizer: PreTrainedTokenizer, max_length: int = get_max_seq_length(cfg)):
+    def preprocess_function(examples, tokenizer: PreTrainedTokenizer, max_length):
         questions = [q.strip() for q in examples["question"]]
         inputs = tokenizer(
             questions,
@@ -55,7 +67,8 @@ def training(cfg: DictConfig) -> None:
             max_length=max_length,
             truncation=True,
             return_offsets_mapping=True,
-            padding="max_length",
+            padding=True,
+            pad_to_multiple_of=64,
         )
 
         offset_mapping = inputs.pop("offset_mapping")
@@ -118,26 +131,41 @@ def training(cfg: DictConfig) -> None:
 
     logger.info(f"first sample: {qa_ds['test'][0]}")
 
+    task_max_length = get_max_seq_length(cfg) if not cfg.task.task_name.startswith('niah_') else cfg.task.max_length
+    logger.info(f"Using {task_max_length} as max_seq_length")
+    
+
     tokenized_qa_ds: DatasetDict = qa_ds.map(
         preprocess_function,
         batched=True,
         fn_kwargs={
             "tokenizer": tokenizer,
-            "max_length": get_max_seq_length(cfg),
+            "max_length": task_max_length,
         },
     )
+
+    train_fp16 = cfg.train_procedure.get("fp16", False)
+    if cfg.task.task_name in {"mlqa", "germanquad"}:
+        train_fp16 = False  # backward compatibility!
+
+    logger.info(f"Training with {train_fp16=}")
 
     training_args = TrainingArguments(
         output_dir=Path.cwd() / cfg.task.task_name / "training_logs",
         learning_rate=cfg.train_args.learning_rate,
         per_device_train_batch_size=cfg.train_args.batch_size,
-        per_device_eval_batch_size=cfg.train_args.batch_size,
+        per_device_eval_batch_size=1,
         num_train_epochs=cfg.train_args.epochs,
-        # fp16=cfg.train_args.get("fp16", False),
+        seed=cfg.seed,
+        log_level="info",
+        logging_strategy="steps",
+        logging_steps=100,
+        fp16=train_fp16,
+        include_for_metrics=["inputs"],
         gradient_accumulation_steps=(
             cfg.train_args.gradient_accumulation_steps if cfg.train_args.gradient_accumulation_steps else 1
         ),
-        optim="paged_adamw_8bit",
+     #   optim="paged_adamw_8bit",
         save_strategy="no",
     )
 
@@ -145,11 +173,15 @@ def training(cfg: DictConfig) -> None:
     Gemma2ForQuestionAnswering.register_for_auto_class("AutoModelForQuestionAnswering")
     AutoModelForQuestionAnswering.register(Gemma2Config, Gemma2ForQuestionAnswering)
 
-    config = AutoConfig.from_pretrained(cfg.model.model_name, finetuning_task="question-answering")
+    ModernBertForQuestionAnswering.register_for_auto_class("AutoModelForQuestionAnswering")
+    AutoModelForQuestionAnswering.register(ModernBertConfig, ModernBertForQuestionAnswering)
+
+    config = AutoConfig.from_pretrained(cfg.model.model_name, finetuning_task="question-answering",
+                                        **cfg.model.get("model_config_args", {}))
 
     bnb_config = {}
     if "bnb_config" in cfg.train_procedure:
-        if config.model_type == "bert":  # bert does not support quantization
+        if config.model_type == "bert" or config.model_type=="modernbert":  # bert does not support quantization
             bnb_config = {}
         else:
             bnb_config = {"quantization_config": get_bnb_config(cfg)}
@@ -190,8 +222,12 @@ def training(cfg: DictConfig) -> None:
 
     def compute_metrics(p):
         preds = p.predictions
+        inputs = p.inputs
+
+        input_seq_len = np.sum((inputs >= 0) & (inputs != tokenizer.pad_token_id), axis=-1)
         if len(preds) == 3:
             preds = preds[:2]
+
         label_ids = p.label_ids
         max_last_dim = np.argmax(preds, axis=2)
         preds_2d = max_last_dim.reshape((-1, max_last_dim.shape[-1]))
@@ -208,10 +244,30 @@ def training(cfg: DictConfig) -> None:
         acc = exact_match_score(flat_preds, flat_labels)
         acc = sum(acc) / len(acc)
         logger.info(f"f1: {f1}, acc: {acc}")
-        return {
+        global_metrics = {
             "f1_score": f1,
             "acc_score": acc,
         }
+
+        if cfg.task.task_name.startswith("niah_"):
+            label_ids = np.array(label_ids)
+            for begin in range(0, task_max_length, 1024):
+                end = begin + 1024
+                mask = (begin <= input_seq_len) & (input_seq_len < end)
+                if sum(mask) == 0:
+                    continue
+                
+                flat_labels = label_ids[:,mask].flatten()
+                flat_preds = preds_2d[:,mask].flatten()
+                f1 = f1_score(flat_preds, flat_labels)
+                match_scores = exact_match_score(flat_preds, flat_labels)
+                acc = sum(match_scores) / len(match_scores)
+                logger.info(f"for range [{begin}:{end}]: f1: {f1}, acc: {acc}, num: {len(match_scores)}")
+                global_metrics[f'f1_score_{end}'] = f1
+                global_metrics[f'acc_score_{end}'] = acc
+                global_metrics[f'num_samples_{end}'] = sum(mask)
+
+        return global_metrics
 
     logger.info("creating trainer")
 
