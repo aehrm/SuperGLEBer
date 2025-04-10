@@ -11,8 +11,8 @@ def make_job(model_path, *args):
     job.extend(args)
     return job
 
-ext1_models = list(natsorted(hf_checkpoint_prefix.glob("modernbert_1b_ext1_helma_43218*")))[-1::-3]
-ext2_models = list(natsorted(hf_checkpoint_prefix.glob("modernbert_1b_ext2_helma_44604*")))[-1::-2]
+ext1_models = list(natsorted(hf_checkpoint_prefix.glob("modernbert_1b_ext1_helma_43218*")))[-1:]
+ext2_models = list(natsorted(hf_checkpoint_prefix.glob("modernbert_1b_ext2_helma_44604*")))[-1:]
 pretrain_model = "modernbert_1b_middle_helma_313949--ep0-ba158000-rank0"
 
 jobs = []
@@ -24,6 +24,14 @@ for m in ext2_models:
 
 jobs.append(make_job(hf_checkpoint_prefix / pretrain_model))
 jobs.append(make_job(hf_checkpoint_prefix / pretrain_model, "+model.model_config_args.global_rope_theta=160e3"))
+
+for m in ["1B_new_01430512", "7B_01430512"]:
+    jobs.append(["train_args=a100", "+task=niah_germanquad", f"+model={m}"])
+    jobs.append(["train_args=a100", "+task=niah_germanquad", f"+model={m}", "+model.model_config_args.rope_theta=160e3"])
+
+for m in ["meta_llama3_2__1b"]:
+    jobs.append(["train_args=a100", "+task=niah_germanquad", f"+model={m}"])
+
 
 with open('slurm_template.jinja') as f:
     tmpl = Template(f.read())

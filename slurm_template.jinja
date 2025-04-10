@@ -14,8 +14,7 @@
 cd {{pwd}}
 
 PARAM_ARR=(
-   {% for job in jobs %}
-      "{{ job|join(' ') }}"
+   {% for job in jobs %} "{{ job|join(' ') }}"
    {% endfor %}
 )
 
