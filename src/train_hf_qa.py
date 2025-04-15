@@ -68,8 +68,7 @@ def training(cfg: DictConfig) -> None:
             max_length=max_length,
             truncation=True,
             return_offsets_mapping=True,
-            padding=True,
-            pad_to_multiple_of=64,
+            padding='max_length',
         )
 
         offset_mapping = inputs.pop("offset_mapping")
@@ -132,18 +131,14 @@ def training(cfg: DictConfig) -> None:
 
     logger.info(f"first sample: {qa_ds['test'][0]}")
 
-    task_max_length = get_max_seq_length(cfg) if not cfg.task.task_name.startswith('niah_') else cfg.task.max_length
-    logger.info(f"Using {task_max_length} as max_seq_length")
-    
+    if not cfg.task.task_name.startswith('niah_'):
+        task_max_train_length = task_max_test_length = get_max_seq_length(cfg)
+    else:
+        task_max_train_length = cfg.task.max_train_length
+        task_max_test_length = cfg.task.max_test_length
 
-    tokenized_qa_ds: DatasetDict = qa_ds.map(
-        preprocess_function,
-        batched=True,
-        fn_kwargs={
-            "tokenizer": tokenizer,
-            "max_length": task_max_length,
-        },
-    )
+    logger.info(f"Training with max seq len {task_max_train_length}")
+    logger.info(f"Testing with max seq len {task_max_test_length}")
 
     train_fp16 = cfg.train_procedure.get("fp16", False)
     if cfg.task.task_name in {"mlqa", "germanquad"}:
@@ -268,17 +263,34 @@ def training(cfg: DictConfig) -> None:
     logger.info("creating trainer")
 
     if cfg.task.task_name == "mlqa":
-        train_dataset = tokenized_qa_ds["validation"]
+        train_dataset = qa_ds["validation"]
     else:
-        train_dataset = tokenized_qa_ds["train"]
+        train_dataset = qa_ds["train"]
 
-    test_dataset = tokenized_qa_ds["test"]
+    test_dataset = qa_ds["test"]
+
+    tokenized_train_dataset = train_dataset.map(
+        preprocess_function,
+        batched=True,
+        fn_kwargs={
+            "tokenizer": tokenizer,
+            "max_length": task_max_train_length,
+        },
+    )
+    tokenized_train_dataset = test_dataset.map(
+        preprocess_function,
+        batched=True,
+        fn_kwargs={
+            "tokenizer": tokenizer,
+            "max_length": task_max_test_length,
+        },
+    )
 
     trainer = Trainer(
         model=model,
         args=training_args,
-        train_dataset=train_dataset,
-        eval_dataset=test_dataset,
+        train_dataset=tokenized_train_dataset,
+        eval_dataset=tokenized_test_dataset,
         tokenizer=tokenizer,
         compute_metrics=compute_metrics,  # https://github.com/huggingface/peft/issues/1120
     )
