@@ -28,9 +28,9 @@ jobs.append(make_job(hf_checkpoint_prefix / pretrain_model, "+model.model_config
 for m in ["1B_new_01430512", "7B_01430512"]:
     jobs.append(["train_args=a100", "+task=niah_germanquad", f"+model={m}"])
     jobs.append(["train_args=a100", "+task=niah_germanquad", f"+model={m}", "+model.model_config_args.rope_theta=160e3"])
-
-for m in ["meta_llama3_2__1b"]:
-    jobs.append(["train_args=a100", "+task=niah_germanquad", f"+model={m}"])
+    jobs.append(["train_args=a100", "+task=niah_germanquad", f"+model={m}", "+model.model_config_args.rope_scaling={type:'dynamic',factor:4}"])
+#for m in ["meta_llama3_2__1b"]:
+#    jobs.append(["train_args=a100", "+task=niah_germanquad", f"+model={m}"])
 
 
 with open('slurm_template.jinja') as f:
