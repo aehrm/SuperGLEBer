@@ -6,7 +6,7 @@ import pandas as pd
 import torch
 from datasets import DatasetDict, load_from_disk
 from loguru import logger
-from omegaconf import DictConfig
+from omegaconf import DictConfig, OmegaConf
 from peft import LoraConfig, TaskType, get_peft_model, prepare_model_for_kbit_training
 from transformers import AutoConfig, AutoModelForQuestionAnswering
 from transformers.models.auto.tokenization_auto import AutoTokenizer
@@ -134,8 +134,8 @@ def training(cfg: DictConfig) -> None:
     if not cfg.task.task_name.startswith('niah_'):
         task_max_train_length = task_max_test_length = get_max_seq_length(cfg)
     else:
-        task_max_train_length = cfg.task.max_train_length
-        task_max_test_length = cfg.task.max_test_length
+        task_max_train_length = cfg.task.train_max_length
+        task_max_test_length = cfg.task.test_max_length
 
     logger.info(f"Training with max seq len {task_max_train_length}")
     logger.info(f"Testing with max seq len {task_max_test_length}")
@@ -172,8 +172,14 @@ def training(cfg: DictConfig) -> None:
     ModernBertForQuestionAnswering.register_for_auto_class("AutoModelForQuestionAnswering")
     AutoModelForQuestionAnswering.register(ModernBertConfig, ModernBertForQuestionAnswering)
 
+    model_config_args = {}
+    if 'model_config_args' in cfg.model.keys():
+        model_config_args = OmegaConf.to_container(cfg.model.model_config_args, resolve=True)
+
+    print("model_config_args", model_config_args)
+
     config = AutoConfig.from_pretrained(cfg.model.model_name, finetuning_task="question-answering",
-                                        **cfg.model.get("model_config_args", {}))
+                                        **model_config_args)
 
     bnb_config = {}
     if "bnb_config" in cfg.train_procedure:
@@ -242,7 +248,7 @@ def training(cfg: DictConfig) -> None:
 
         if cfg.task.task_name.startswith("niah_"):
             label_ids = np.array(label_ids)
-            for begin in range(0, task_max_length, 1024):
+            for begin in range(0, task_max_test_length, 1024):
                 end = begin + 1024
                 mask = (begin <= input_seq_len) & (input_seq_len < end)
                 if sum(mask) == 0:
@@ -277,7 +283,7 @@ def training(cfg: DictConfig) -> None:
             "max_length": task_max_train_length,
         },
     )
-    tokenized_train_dataset = test_dataset.map(
+    tokenized_test_dataset = test_dataset.map(
         preprocess_function,
         batched=True,
         fn_kwargs={
