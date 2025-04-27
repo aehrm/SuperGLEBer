@@ -14,7 +14,7 @@
 cd {{pwd}}
 
 PARAM_ARR=(
-   {% for job in jobs %} "{{ job|join(' ') }}"
+   {% for job in jobs %} "{{ job|join(' ') }}"  # {{ loop.index0 }}
    {% endfor %}
 )
 
@@ -22,7 +22,6 @@ PARAM_ARR=(
 
 PARAMS=${PARAM_ARR[$SLURM_ARRAY_TASK_ID]}
 
-source venv/bin/activate
-echo python src/train.py $PARAMS
-srun python src/train.py $PARAMS
+echo apptainer exec --nv super_llm2vec.sif python src/train.py $PARAMS
+srun apptainer exec --nv super_llm2vec.sif python src/train.py $PARAMS
 
