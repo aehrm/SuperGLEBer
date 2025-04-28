@@ -125,6 +125,9 @@ def training(cfg: DictConfig) -> None:
     if tokenizer.pad_token is None:
         tokenizer.pad_token = tokenizer.eos_token
 
+    if cfg.model.get("padding_side") is not None:
+        tokenizer.padding_side = cfg.model["padding_side"]
+
     logger.info("loading and tokenizing dataset")
     qa_ds = load_from_disk(cfg.task.corpus_args.data_folder)
 
