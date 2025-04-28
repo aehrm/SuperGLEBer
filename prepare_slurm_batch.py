@@ -10,16 +10,18 @@ jobs = []
 
 for m in [
     "/data/42-julia-hpc-rz-lsx/juw57zv/models/120M_LLM2Vec_2048/iter-01430512-ckpt_120M_mntp_sim_new",
-    "/data/42-julia-hpc-rz-lsx/juw57zv/models/120M_LLM2Vec_2048/iter-01430512-ckpt_120M_sim_new",
     "/data/42-julia-hpc-rz-lsx/juw57zv/models/1B_LLM2Vec_2048/iter-01430512-ckpt_1B_mntp_sim_new",
-    "/data/42-julia-hpc-rz-lsx/juw57zv/models/1B_LLM2Vec_2048/iter-01430512-ckpt_1B_sim_new",
     "/data/42-julia-hpc-rz-lsx/juw57zv/models/7B_LLM2Vec_2048/iter-01430512-ckpt_7B_mntp_sim",
-    "/data/42-julia-hpc-rz-lsx/juw57zv/models/7B_LLM2Vec_2048/iter-01430512-ckpt_7B_sim",
     ]:
     jobs.append(["train_args=a100", "+task=niah_germanquad", "+model=llm2vec_for_mntp-10000_simcse-200", f"model.model_name={m}"])
     jobs.append(["train_args=a100", "+task=niah_germanquad", "+model=llm2vec_for_mntp-10000_simcse-200", f"model.model_name={m}", "+model.model_config_args.rope_scaling={type:'dynamic',factor:2}"])
     jobs.append(["train_args=a100", "+task=niah_germanquad", "+model=llm2vec_for_mntp-10000_simcse-200", f"model.model_name={m}", "+model.model_config_args.rope_scaling={type:'dynamic',factor:4}"])
     jobs.append(["train_args=a100", "+task=niah_germanquad", "+model=llm2vec_for_mntp-10000_simcse-200", f"model.model_name={m}", "+model.model_config_args.rope_scaling={type:'dynamic',factor:8}"])
+    jobs.append(["train_args=a100", "+task=niah_germanquad", "+model=llm2vec_for_mntp-10000_simcse-200", f"model.model_name={m}", "+model.model_config_args.rope_scaling={type:'dynamic',factor:16}"])
+    jobs.append(["train_args=a100", "+task=niah_germanquad", "+model=llm2vec_for_mntp-10000_simcse-200", f"model.model_name={m}", "+model.model_config_args.rope_scaling={type:'dynamic',factor:32}"])
+    jobs.append(["train_args=a100", "+task=niah_germanquad", "+model=llm2vec_for_mntp-10000_simcse-200", f"model.model_name={m}", "+model.model_config_args.rope_scaling={type:'dynamic',factor:8}", "+model.padding_side='left'"])
+    jobs.append(["train_args=a100", "+task=niah_germanquad", "+model=llm2vec_for_mntp-10000_simcse-200", f"model.model_name={m}", "+model.model_config_args.rope_scaling={type:'dynamic',factor:16}", "+model.padding_side='left'"])
+    jobs.append(["train_args=a100", "+task=niah_germanquad", "+model=llm2vec_for_mntp-10000_simcse-200", f"model.model_name={m}", "+model.model_config_args.rope_scaling={type:'dynamic',factor:32}", "+model.padding_side='left'"])
 
 # alte Modelle
 for m in [
