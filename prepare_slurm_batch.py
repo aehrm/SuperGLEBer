@@ -11,6 +11,7 @@ def make_job(model_path, *args):
     job.extend(args)
     return job
 
+# modernbert 1b
 ext1_models = list(natsorted(hf_checkpoint_prefix.glob("modernbert_1b_ext1_helma_43218*")))[-1:]
 ext2_models = list(natsorted(hf_checkpoint_prefix.glob("modernbert_1b_ext2_helma_44604*")))[-1:]
 pretrain_model = "modernbert_1b_middle_helma_313949--ep0-ba158000-rank0"
@@ -25,13 +26,29 @@ for m in ext2_models:
 jobs.append(make_job(hf_checkpoint_prefix / pretrain_model))
 jobs.append(make_job(hf_checkpoint_prefix / pretrain_model, "+model.model_config_args.global_rope_theta=160e3"))
 
-for m in ["1B_new_01430512", "7B_01430512"]:
+# modernbert base
+ext1_models = list(natsorted(hf_checkpoint_prefix.glob("modernbert_base_ext1_helma_51643*")))[-1:]
+ext2_models = list(natsorted(hf_checkpoint_prefix.glob("modernbert_base_ext2_helma_52082*")))[-1:]
+pretrain_model = "modernbert_base_267194--ep0-ba104000-rank0"
+
+for m in ext1_models:
+    jobs.append(make_job(hf_checkpoint_prefix / m))
+
+for m in ext2_models:
+    jobs.append(make_job(hf_checkpoint_prefix / m))
+
+jobs.append(make_job(hf_checkpoint_prefix / pretrain_model))
+jobs.append(make_job(hf_checkpoint_prefix / pretrain_model, "+model.model_config_args.global_rope_theta=160e3"))
+
+# llammlein decoders
+for m in ["120M_new_01430512", "1B_new_01430512", "7B_01430512"]:
     jobs.append(["train_args=a100", "+task=niah_germanquad", f"+model={m}"])
     jobs.append(["train_args=a100", "+task=niah_germanquad", f"+model={m}", "+model.model_config_args.rope_theta=160e3"])
     jobs.append(["train_args=a100", "+task=niah_germanquad", f"+model={m}", "+model.model_config_args.rope_scaling={type:'dynamic',factor:4}"])
-#for m in ["meta_llama3_2__1b"]:
-#    jobs.append(["train_args=a100", "+task=niah_germanquad", f"+model={m}"])
 
+# other decoders
+for m in ["meta_llama3_2__1b", "leo_hessian_7b", "meta_llama3_8b"]:
+    jobs.append(["train_args=a100", "+task=niah_germanquad", f"+model={m}"])
 
 with open('slurm_template.jinja') as f:
     tmpl = Template(f.read())
