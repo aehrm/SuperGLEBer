@@ -14,6 +14,7 @@ def make_job(model_path, *args):
 # modernbert 1b
 ext1_models = list(natsorted(hf_checkpoint_prefix.glob("modernbert_1b_ext1_helma_43218*")))[-1:]
 ext2_models = list(natsorted(hf_checkpoint_prefix.glob("modernbert_1b_ext2_helma_44604*")))[-1:]
+ext2open_models = list(natsorted(hf_checkpoint_prefix.glob("modernbert_1b_ext2open_helma_58500*")))[-1:]
 pretrain_model = "modernbert_1b_middle_helma_313949--ep0-ba158000-rank0"
 
 jobs = []
@@ -23,18 +24,25 @@ for m in ext1_models:
 for m in ext2_models:
     jobs.append(make_job(hf_checkpoint_prefix / m))
 
+for m in ext2open_models:
+    jobs.append(make_job(hf_checkpoint_prefix / m))
+
 jobs.append(make_job(hf_checkpoint_prefix / pretrain_model))
 jobs.append(make_job(hf_checkpoint_prefix / pretrain_model, "+model.model_config_args.global_rope_theta=160e3"))
 
 # modernbert base
 ext1_models = list(natsorted(hf_checkpoint_prefix.glob("modernbert_base_ext1_helma_51643*")))[-1:]
 ext2_models = list(natsorted(hf_checkpoint_prefix.glob("modernbert_base_ext2_helma_52082*")))[-1:]
+ext2open_models = list(natsorted(hf_checkpoint_prefix.glob("modernbert_base_ext2open_helma_58501*")))[-1:]
 pretrain_model = "modernbert_base_267194--ep0-ba104000-rank0"
 
 for m in ext1_models:
     jobs.append(make_job(hf_checkpoint_prefix / m))
 
 for m in ext2_models:
+    jobs.append(make_job(hf_checkpoint_prefix / m))
+
+for m in ext2open_models:
     jobs.append(make_job(hf_checkpoint_prefix / m))
 
 jobs.append(make_job(hf_checkpoint_prefix / pretrain_model))
