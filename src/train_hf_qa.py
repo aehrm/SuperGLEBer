@@ -245,6 +245,10 @@ def training(cfg: DictConfig) -> None:
         logger.info(f"writing results to {path}")
         new_df.to_csv(f"{path}/results.csv", header=True)
 
+        seq_len_df = pd.DataFrame()
+        seq_len_df['input_seq_len'] = input_seq_len
+        seq_len_df.to_csv(f"{path}/input_seq_len.csv", header=True)
+
         f1 = f1_score(flat_preds, flat_labels)
         acc = exact_match_score(flat_preds, flat_labels)
         acc = sum(acc) / len(acc)
@@ -299,6 +303,11 @@ def training(cfg: DictConfig) -> None:
             "max_length": task_max_test_length,
         },
     )
+
+    #first_sample = tokenized_test_dataset[13]
+    #print(tokenizer.decode(first_sample['input_ids']))
+    #print(tokenizer.decode(first_sample['input_ids'][first_sample['start_positions']:first_sample['end_positions']+1]))
+    #print(first_sample['answers']['text'][0])
 
     trainer = Trainer(
         model=model,
